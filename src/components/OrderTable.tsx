@@ -69,7 +69,10 @@ export default function OrderTable() {
   const [toDate, setToDate] = useState('')
 
   const [selected, setSelected] = useState<Set<number>>(new Set())
-  const [combining, setCombining] = useState(false)
+  const [auftragErpLoading, setAuftragErpLoading] = useState(false)
+  const [angebotErpLoading, setAngebotErpLoading] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null)
 
   // Track which order's positions dropdown is expanded (by order id), null = none
@@ -135,9 +138,11 @@ export default function OrderTable() {
     setTimeout(() => setToast(null), 4000)
   }
 
-  async function handleCombine() {
+  async function handleAction(action: 'auftrag_erp' | 'angebot_erp') {
     if (selected.size === 0) return
-    setCombining(true)
+    const setLoading = action === 'auftrag_erp' ? setAuftragErpLoading : setAngebotErpLoading
+    const label = action === 'auftrag_erp' ? 'Auftrag ERP' : 'Angebot ERP'
+    setLoading(true)
     const selectedOrders = orders.filter((o) => selected.has(o.id))
     try {
       const res = await fetch('/api/combine', {
@@ -146,16 +151,39 @@ export default function OrderTable() {
         body: JSON.stringify({
           order_ids: selectedOrders.map((o) => o.id),
           ordernumbers: selectedOrders.map((o) => o.ordernumber),
+          action,
         }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Error')
-      showToast('success', `✓ Sent ${selected.size} order(s) to n8n successfully.`)
+      showToast('success', `✓ Sent ${selected.size} order(s) via ${label} to n8n successfully.`)
       setSelected(new Set())
     } catch (e: unknown) {
-      showToast('error', e instanceof Error ? e.message : 'Failed to send to n8n')
+      showToast('error', e instanceof Error ? e.message : `Failed to send via ${label} to n8n`)
     } finally {
-      setCombining(false)
+      setLoading(false)
+    }
+  }
+
+  async function handleDelete() {
+    if (selected.size === 0) return
+    setShowDeleteConfirm(false)
+    setDeleting(true)
+    try {
+      const res = await fetch('/api/orders', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order_ids: [...selected] }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Error')
+      showToast('success', `✓ Deleted ${data.deleted} order(s) successfully.`)
+      setSelected(new Set())
+      fetchOrders(fromDate, toDate)
+    } catch (e: unknown) {
+      showToast('error', e instanceof Error ? e.message : 'Failed to delete orders')
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -329,18 +357,75 @@ export default function OrderTable() {
             </span>
           )}
           <button
-            onClick={handleCombine}
-            disabled={selected.size === 0 || combining}
+            onClick={() => setShowDeleteConfirm(true)}
+            disabled={selected.size === 0 || deleting}
             className={`px-6 py-2 rounded-lg text-sm font-semibold transition-colors ${
-              selected.size === 0 || combining
+              selected.size === 0 || deleting
+                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                : 'bg-red-600 text-white hover:bg-red-700 shadow-sm'
+            }`}
+          >
+            {deleting ? 'Deleting…' : `Delete${selected.size > 0 ? ` (${selected.size})` : ''}`}
+          </button>
+          <div className="w-6" />
+          <button
+            onClick={() => handleAction('angebot_erp')}
+            disabled={selected.size === 0 || angebotErpLoading}
+            className={`px-6 py-2 rounded-lg text-sm font-semibold transition-colors ${
+              selected.size === 0 || angebotErpLoading
                 ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                 : 'bg-green-600 text-white hover:bg-green-700 shadow-sm'
             }`}
           >
-            {combining ? 'Sending…' : `Combine${selected.size > 0 ? ` (${selected.size})` : ''}`}
+            {angebotErpLoading ? 'Sending…' : `Angebot ERP${selected.size > 0 ? ` (${selected.size})` : ''}`}
+          </button>
+          <button
+            onClick={() => handleAction('auftrag_erp')}
+            disabled={selected.size === 0 || auftragErpLoading}
+            className={`px-6 py-2 rounded-lg text-sm font-semibold transition-colors ${
+              selected.size === 0 || auftragErpLoading
+                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                : 'bg-green-600 text-white hover:bg-green-700 shadow-sm'
+            }`}
+          >
+            {auftragErpLoading ? 'Sending…' : `Auftrag ERP${selected.size > 0 ? ` (${selected.size})` : ''}`}
           </button>
         </div>
       </div>
+
+      {/* Delete confirmation modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-xl shadow-2xl p-6 max-w-md w-full mx-4">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900">Delete Orders</h3>
+            </div>
+            <p className="text-sm text-gray-600 mb-6">
+              Are you sure you want to delete <strong>{selected.size}</strong> selected order{selected.size !== 1 ? 's' : ''}?
+              This action cannot be undone and will permanently remove the order{selected.size !== 1 ? 's' : ''} and all associated positions from the database.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                className="px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors"
+              >
+                Yes, Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Toast notification */}
       {toast && (
