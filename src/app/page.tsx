@@ -1,4 +1,5 @@
 import OrderTable from '@/components/OrderTable'
+import UploadZone from '@/components/UploadZone'
 
 export default function Home() {
   return (
@@ -9,7 +10,16 @@ export default function Home() {
           Select orders and combine them for processing in n8n.
         </p>
       </div>
-      <OrderTable />
+
+      <div className="mb-8">
+        <h2 className="text-base font-semibold text-gray-700 mb-3">Upload Documents</h2>
+        <UploadZone />
+      </div>
+
+      <div>
+        <h2 className="text-base font-semibold text-gray-700 mb-3">Orders</h2>
+        <OrderTable />
+      </div>
     </main>
   )
 }
