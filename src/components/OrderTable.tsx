@@ -222,6 +222,13 @@ export default function OrderTable() {
         >
           Apply Filter
         </button>
+        <button
+          type="button"
+          onClick={() => fetchOrders(fromDate, toDate)}
+          className="px-4 py-1.5 bg-gray-100 text-gray-700 text-sm rounded hover:bg-gray-200 transition-colors"
+        >
+          Refresh
+        </button>
         {(fromDate || toDate) && (
           <button
             type="button"

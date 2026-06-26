@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { writeFile, mkdir } from 'fs/promises'
+import { writeFile, mkdir, unlink } from 'fs/promises'
 import path from 'path'
 
 const UPLOAD_DIR = '/uploads'
@@ -36,4 +36,32 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.json({ success: true, files: saved })
+}
+
+export async function DELETE(request: NextRequest) {
+  let body: { filename: string }
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+  }
+
+  if (!body.filename) {
+    return NextResponse.json({ error: 'filename is required' }, { status: 400 })
+  }
+
+  // Prevent path traversal
+  const safe = path.basename(body.filename)
+  const filepath = path.join(UPLOAD_DIR, safe)
+
+  try {
+    await unlink(filepath)
+    return NextResponse.json({ success: true, deleted: safe })
+  } catch (err: unknown) {
+    const code = (err as NodeJS.ErrnoException).code
+    if (code === 'ENOENT') {
+      return NextResponse.json({ error: 'File not found' }, { status: 404 })
+    }
+    return NextResponse.json({ error: 'Failed to delete file' }, { status: 500 })
+  }
 }
